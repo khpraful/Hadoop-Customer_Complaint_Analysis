@@ -1,0 +1,41 @@
+hive
+----
+create database consumer_goods;
+
+create external table complaints(date_of_complaint string, date_of_closure string, street int, city string, state string, zip string, cable_provider string, billing int, service int, internet int, telephone_answering_time int, reception int, construction int, marketing int, installation int, cable_service_availability int, cable_line_related int, telephone_service int, other int, type string, location string) ROW FORMAT delimited fields terminated by ',' location '/user/<username>/ext_table' tblproperties("skip.header.line.count"="1");
+
+LOAD DATA INPATH 'Cable_Complaints.csv' OVERWRITE INTO TABLE complaints;
+
+select distinct(cable_provider) from complaints where city = "Rockville";
+
+select * from complaints where location like "C%";
+
+select count(internet) from complaints where internet = 1 and city = "Ashton" and date_of_complaint like "%2008%";
+
+select cable_provider, zip, city from complaints where telephone_answering_time = 1;
+
+pig
+---
+pig -useHCatalog
+
+complaint_data = LOAD 'consumer_goods.complaints' USING org.apache.hive.hcatalog.pig.HCatLoader();
+
+SPLIT complaint_data INTO billing_complaint_yes IF billing == 1, billing_complaint_no IF billing != 1;
+
+STORE billing_complaint_yes into 'billing_complaint_yes' USING PigStorage(','); 
+STORE billing_complaint_no into 'billing_complaint_no' USING PigStorage(','); 
+
+billing_complaint_yes1 = LOAD 'billing_complaint_yes/part-v000-o000-r-00000'USING PigStorage(',');
+billing_complaint_no1 = LOAD 'billing_complaint_no/part-v000-o000-r-00000'USING PigStorage(',');
+billing_complaint_yes_no = UNION billing_complaint_yes1, billing_complaint_no1;
+STORE billing_complaint_yes_no into 'billing_complaint_yes_no' USING PigStorage(','); 
+
+hive
+----
+create table complaints_new AS select CAST(FROM_UNIXTIME(UNIX_TIMESTAMP(date_of_complaint,'MM/dd/yyyy'),'yyyy-MM-dd') AS DATE) as date_complaint , CAST(FROM_UNIXTIME(UNIX_TIMESTAMP(date_of_closure,'MM/dd/yyyy'),'yyyy-MM-dd') AS DATE) as date_closure, street, city, state, zip, cable_provider, billing, service, internet, telephone_answering_time, reception, construction, marketing, installation, cable_service_availability, cable_line_related, telephone_service, other, type,location from complaints;
+
+select date_complaint, date_closure, (date_complaint - date_closure) as duration, street, city, state, zip, cable_provider, billing, service, internet, telephone_answering_time, reception, construction, marketing, installation, cable_service_availability, cable_line_related, telephone_service, other, type,location from complaints_new order by duration limit 5;
+
+select (_c1 - _c0) as diff from complaints3 order by diff limit 5;
+
+
